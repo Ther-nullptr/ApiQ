@@ -81,7 +81,7 @@ class ModelArguments:
         },
     )
     attn_implementation: str = field(
-        default="sdpa",
+        default="eager",
         metadata={"help": "Choose from [eager, sdpa, flash_attention_2]"},
     )
     adapter_name_or_path: Optional[str] = field(
@@ -264,6 +264,12 @@ def main():
         revision=model_args.model_revision,
         token=model_args.token,
         trust_remote_code=model_args.trust_remote_code,
+        quantization_config=transformers.BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_compute_dtype=torch.bfloat16,
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_quant_type="nf4",
+        ),
     )
 
     if training_args.gradient_checkpointing:
@@ -285,7 +291,7 @@ def main():
             inference_mode=False,
             r=model_args.rank,
             lora_alpha=model_args.lora_alpha,
-            lora_dropout=0.1,
+            lora_dropout=0.0,
             target_modules=target_modules,
             init_lora_weights=True,
         )
@@ -298,10 +304,11 @@ def main():
             token=model_args.token,
         )
     else:
+        print("Using LoftQ initialization.")
         model = PeftModel.from_pretrained(
             model,
             model_args.model_name_or_path,
-            subfolder='apiq_init',
+            subfolder='loftq_init',
             is_trainable=True,
             token=model_args.token,
         )
@@ -330,6 +337,8 @@ def main():
         data_collator=data_collator,
         compute_metrics=None,
     )
+    
+    print(model)
 
     # Training
     if training_args.do_train:
